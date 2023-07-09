@@ -5,10 +5,13 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	html2md "github.com/JohannesKaufmann/html-to-markdown"
+	"github.com/PuerkitoBio/goquery"
 )
 
 func CLI(args []string) int {
@@ -77,7 +80,38 @@ func (app *appEnv) fromArgs(args []string) error {
 }
 
 func (app *appEnv) run() error {
+	// substack renders picture inside a special link (called image-link)
+	imageLink := html2md.Rule{
+		Filter: []string{"a"},
+		Replacement: func(content_ string, selec *goquery.Selection, opt_ *html2md.Options) *string {
+			// If the span element has not the classname `image-link` return nil.
+			// That way the next rules will apply. In this case the commonmark rules.
+			// -> return nil -> next rule applies
+			if !selec.HasClass("image-link") {
+				return nil
+			}
+
+			// substack image link looks like this https://substackcdn.com/image/fetch/f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F5647c172-e678-4e9b-89f1-c1eb86ebd2e7_990x598.png
+			// Get href. Get the part after `https%3A%2F%2F`.
+			href, ok := selec.Attr("href")
+			if !ok || strings.TrimSpace(href) == "" || strings.TrimSpace(href) == "#" {
+				return nil
+			}
+			idx := strings.Index(href, "https%3A%2F%2F")
+			if idx == -1 {
+				return nil
+			}
+			href, err := url.QueryUnescape(href[idx:])
+			if err != nil {
+				return nil
+			}
+			return html2md.String("![](" + href + ")")
+		},
+	}
+
 	converter := html2md.NewConverter("", true, nil)
+	converter.AddRules(imageLink)
+
 	archive, err := app.fetchArchive()
 	if err != nil {
 		return err

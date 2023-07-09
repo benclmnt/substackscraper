@@ -105,12 +105,31 @@ func (app *appEnv) run() error {
 			if err != nil {
 				return nil
 			}
+			// Replace an old s3 bucket name
+			href = strings.Replace(href, "bucketeer-e05bbc84-baa3-437e-9518-adb32be77984", "substack-post-media", 1)
 			return html2md.String("![](" + href + ")")
 		},
 	}
 
+	internalLink := html2md.Rule{
+		Filter: []string{"a"},
+		Replacement: func(content_ string, selec *goquery.Selection, opt_ *html2md.Options) *string {
+			href, ok := selec.Attr("href")
+			if !ok || strings.TrimSpace(href) == "" || strings.TrimSpace(href) == "#" {
+				return nil
+			}
+
+			// If the link is internal, cut the hostname and return an internal markdown link.
+			hostname := "https://" + app.pubName + ".substack.com/p/"
+			if strings.HasPrefix(href, hostname) {
+				return html2md.String("[" + selec.Text() + "](" + strings.Replace(href, hostname, "", 1) + ")")
+			}
+			return nil
+		},
+	}
+
 	converter := html2md.NewConverter("", true, nil)
-	converter.AddRules(imageLink)
+	converter.AddRules(imageLink, internalLink)
 
 	archive, err := app.fetchArchive()
 	if err != nil {
@@ -208,7 +227,7 @@ func (app *appEnv) writePost(post postApiResponse, sectionSlug string) error {
 	if app.outputType == "md" {
 		_, err = f.WriteString(fmt.Sprintf(
 			`---
-title: %s
+title: "%s"
 date: %s
 alias: []
 tags: [%s]
@@ -216,7 +235,9 @@ tags: [%s]
 
 # %s
 
-> %s
+%s
+
+---
 
 %s`, post.Title, post.PostDate.Format("2006-01-02"), sectionSlug, post.Title, post.Subtitle, post.Body))
 	} else {

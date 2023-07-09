@@ -20,8 +20,6 @@ type postApiResponse struct {
 	CanonicalUrl  string    `json:"canonical_url"`
 	Description   string    `json:"description"`
 	Body          string    `json:"body_html"`
-	SectionSlug   string    `json:"section_slug"`
-	SectionName   string    `json:"section_name"`
 }
 
 // /api/v1/archive?offset=0&limit=10
@@ -31,5 +29,7 @@ type archiveApiInnerResponse struct {
 	Slug     string    `json:"slug"`
 	PostDate time.Time `json:"post_date"`
 	// audience is 'everyone' or 'only_paid'
-	Audience string `json:"audience"`
+	Audience    string `json:"audience"`
+	SectionSlug string `json:"section_slug"`
+	SectionName string `json:"section_name"`
 }

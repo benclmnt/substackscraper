@@ -135,7 +135,7 @@ func (app *appEnv) run() error {
 			post.Body = content
 		}
 
-		err = app.writePost(post)
+		err = app.writePost(post, p.SectionSlug)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error writing post %s: %v\n", slug, err)
 			continue
@@ -197,7 +197,7 @@ func (app *appEnv) fetchPost(slug string) (postApiResponse, error) {
 	return pr, nil
 }
 
-func (app *appEnv) writePost(post postApiResponse) error {
+func (app *appEnv) writePost(post postApiResponse, sectionSlug string) error {
 	f, err := os.Create(fmt.Sprintf("%s/%s.%s", app.destFolder, post.Slug, app.outputType))
 
 	if err != nil {
@@ -218,7 +218,7 @@ tags: [%s]
 
 > %s
 
-%s`, post.Title, post.PostDate.Format("2006-01-02"), post.SectionSlug, post.Title, post.Subtitle, post.Body))
+%s`, post.Title, post.PostDate.Format("2006-01-02"), sectionSlug, post.Title, post.Subtitle, post.Body))
 	} else {
 		_, err = f.WriteString(fmt.Sprintf("<h1>%s</h1><h2>%s</h2>%s", post.Title, post.Subtitle, post.Body))
 	}

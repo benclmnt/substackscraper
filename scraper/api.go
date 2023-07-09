@@ -28,5 +28,8 @@ type postApiResponse struct {
 type archiveApiResponse []archiveApiInnerResponse
 
 type archiveApiInnerResponse struct {
-	Slug string `json:"slug"`
+	Slug     string    `json:"slug"`
+	PostDate time.Time `json:"post_date"`
+	// audience is 'everyone' or 'only_paid'
+	Audience string `json:"audience"`
 }

@@ -34,6 +34,8 @@ type appEnv struct {
 	outputType string
 	// folder to write output to. defaults to current directory
 	destFolder string
+	// fetch posts since this date (YYYY-MM-DD)
+	since time.Time
 }
 
 func (app *appEnv) fromArgs(args []string) error {
@@ -45,30 +47,42 @@ func (app *appEnv) fromArgs(args []string) error {
 	fl.StringVar(&app.cookie, "cookie", "", "Substack API cookie (remove the `substack.sid` prefix)")
 	fl.StringVar(&app.outputType, "output", "html", "Output format: html(default) or md")
 	fl.StringVar(&app.destFolder, "dest", ".", "Destination folder to write output to. Defaults to current directory")
+	var sinceStr string
+	fl.StringVar(&sinceStr, "since", "1970-01-01", "Fetch posts since this date (YYYY-MM-DD). Defaults to 1970-01-01")
 	if err := fl.Parse(args); err != nil {
 		return err
 	}
+
 	if app.pubName == "" {
 		fmt.Fprintln(os.Stderr, "missing required flag: -pub")
 		fl.Usage()
 		return flag.ErrHelp
 	}
+
 	if app.outputType != "html" && app.outputType != "md" {
 		fmt.Fprintf(os.Stderr, "invalid output type: %s", app.outputType)
 		fl.Usage()
 		return flag.ErrHelp
 	}
+
+	since, err := time.Parse("2006-01-02", sinceStr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error parsing since date: %v\n", err)
+		fl.Usage()
+		return flag.ErrHelp
+	}
+	app.since = since
+
 	return nil
 }
 
 func (app *appEnv) run() error {
-	archive, err := app.fetchArchive(0, 3)
+	converter := html2md.NewConverter("", true, nil)
+	archive, err := app.fetchArchive()
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%+v\n", archive)
-
-	converter := html2md.NewConverter("", true, nil)
+	fmt.Printf("fetching %d posts\n", len(archive))
 
 	for _, p := range archive {
 		slug := p.Slug
@@ -113,13 +127,31 @@ func (app *appEnv) fetchJSON(url string, data interface{}) error {
 	return json.NewDecoder(resp.Body).Decode(data)
 }
 
-func (app *appEnv) fetchArchive(offset, limit int) (archiveApiResponse, error) {
-	var ar archiveApiResponse
-	err := app.fetchJSON(buildUrl(app.pubName, fmt.Sprintf("archive?offset=%d&limit=%d", offset, limit)), &ar)
-	if err != nil {
-		return nil, err
+// fetch all archived posts after app.since
+func (app *appEnv) fetchArchive() (archiveApiResponse, error) {
+	offset := 0
+	var results archiveApiResponse
+	for {
+		var ar archiveApiResponse
+		err := app.fetchJSON(buildUrl(app.pubName, fmt.Sprintf("archive?offset=%d&limit=%d", offset, 50)), &ar)
+		if err != nil {
+			return nil, err
+		}
+		for _, a := range ar {
+			if a.PostDate.After(app.since) {
+				results = append(results, a)
+			}
+		}
+		if len(ar) < 50 || ar[49].PostDate.Before(app.since) {
+			// we're done, there's nothing left
+			break
+		}
+		offset += 50
+
+		// wait on rate limiter
+		time.Sleep(1 * time.Second)
 	}
-	return ar, nil
+	return results, nil
 }
 
 func (app *appEnv) fetchPost(slug string) (postApiResponse, error) {
@@ -140,18 +172,19 @@ func (app *appEnv) writePost(post postApiResponse) error {
 	defer f.Close()
 
 	if app.outputType == "md" {
-		_, err = f.WriteString(fmt.Sprintf(`
----
+		_, err = f.WriteString(fmt.Sprintf(
+			`---
 title: %s
 date: %s
 alias: []
 tags: [%s]
 ---
+
 # %s
 
 > %s
 
-%s`, post.Title, post.PostDate, post.SectionSlug, post.Title, post.Subtitle, post.Body))
+%s`, post.Title, post.PostDate.Format("2006-01-02"), post.SectionSlug, post.Title, post.Subtitle, post.Body))
 	} else {
 		_, err = f.WriteString(fmt.Sprintf("<h1>%s</h1><h2>%s</h2>%s", post.Title, post.Subtitle, post.Body))
 	}

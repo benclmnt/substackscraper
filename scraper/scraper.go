@@ -48,10 +48,10 @@ func (app *appEnv) fromArgs(args []string) error {
 
 	fl.StringVar(&app.pubName, "pub", "", "Name of the Substack publication to scrape (required)")
 	fl.StringVar(&app.cookie, "cookie", "", "Substack API cookie (remove the `substack.sid` prefix)")
-	fl.StringVar(&app.outputType, "output", "html", "Output format: html(default) or md")
-	fl.StringVar(&app.destFolder, "dest", ".", "Destination folder to write output to. Defaults to current directory")
+	fl.StringVar(&app.outputType, "output", "md", "Output format: html or md")
+	fl.StringVar(&app.destFolder, "dest", ".", "Destination folder to write output to")
 	var sinceStr string
-	fl.StringVar(&sinceStr, "since", "1970-01-01", "Fetch posts since this date (YYYY-MM-DD). Defaults to 1970-01-01")
+	fl.StringVar(&sinceStr, "since", "1970-01-01", "Fetch posts since this date (YYYY-MM-DD)")
 	if err := fl.Parse(args); err != nil {
 		return err
 	}
@@ -160,6 +160,7 @@ func (app *appEnv) run() error {
 			continue
 		}
 
+		fmt.Print(".")
 		// wait on rate limiter
 		time.Sleep(1 * time.Second)
 	}
